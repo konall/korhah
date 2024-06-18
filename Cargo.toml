@@ -1,0 +1,21 @@
+[package]
+name = "korhah"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+description = "A minimal & extensible reactive event system"
+repository = "https://github.com/konall/korhah"
+categories = ["gui", "no-std", "rust-patterns"]
+
+[dependencies]
+ahash = { version = "0.8.11", default-features = false }
+educe = { version = "0.6.0", default-features = false, features = [
+    "Clone", "Copy", "Debug", "Eq", "Hash", "PartialEq", "PartialOrd", "Ord"
+] }
+indexmap = { version = "2.2.6", default-features = false }
+spin = { version = "0.9.8", default-features = false, features = ["spin_mutex", "mutex"] }
+
+[features]
+default = ["std"]
+std = ["ahash/std", "indexmap/std", "spin/std"]
+unsync = []
