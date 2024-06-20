@@ -20,7 +20,7 @@ struct Element {
 fn main() {
     let mut dom = System::default();
 
-    // the state is
+    // the DOM state is stored alongside the elements
     let state = dom
         .create(|_, _| State::default())
         .expect("no cancelling listeners registered");
@@ -64,9 +64,8 @@ fn main() {
             parent: Some(body),
             text: dom
                 .read(input, |el| el.text.clone())
-                .ok()
-                .flatten()
-                .expect("no variables deleted yet"),
+                .expect("no cancelling listeners registered")
+                .expect("`input` exists"),
             children: vec![],
         })
         .expect("no cancelling listeners registered");

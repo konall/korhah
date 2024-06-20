@@ -113,7 +113,8 @@ impl<'x> System<'x> {
     }
 
     /// Update the value of a variable in the reactive system.\
-    /// The `callback` parameter performs the update- it receives a mutable reference to the target variable's current value.
+    /// The `callback` parameter performs the update, and optionally returns a value to the caller- it receives
+    /// a mutable reference to the target variable's current value.
     ///
     /// Returns:
     /// - [`Err`], if the action was cancelled
@@ -132,10 +133,10 @@ impl<'x> System<'x> {
     /// _ = system.delete(a);
     /// assert_eq!(Ok(None), system.update(a, |v| *v += 2));
     /// ```
-    pub fn update<T, F>(&mut self, variable: Variable<T>, callback: F) -> Result<Option<()>, ()>
+    pub fn update<T, F, S>(&mut self, variable: Variable<T>, callback: F) -> Result<Option<S>, ()>
     where
         T: VariableBounds,
-        F: FnOnce(&mut T),
+        F: FnOnce(&mut T) -> S,
     {
         SystemInner::update(self.clone(), variable, callback)
     }
@@ -415,14 +416,14 @@ impl<'x> SystemInner<'x> {
     }
 
     /// update the value of a variable in the reactive system
-    fn update<T, F>(
+    fn update<T, F, S>(
         mut this: System<'x>,
         variable: Variable<T>,
         callback: F,
-    ) -> Result<Option<()>, ()>
+    ) -> Result<Option<S>, ()>
     where
         T: VariableBounds,
-        F: FnOnce(&mut T),
+        F: FnOnce(&mut T) -> S,
     {
         if !this.hold().values.contains_key(&variable.id) {
             // the target variable doesn't exist so we ignore this request
@@ -439,7 +440,7 @@ impl<'x> SystemInner<'x> {
         }
 
         // invoke the callback that will update the variable
-        callback(
+        let ret = callback(
             // this type system should prevent downcasting errors here, so `unwrap` is used here to preserve the semantic meaning of
             // an `Ok(Some)`, `Ok(None)`, or `Err` return value from this function
             this.hold()
@@ -487,7 +488,7 @@ impl<'x> SystemInner<'x> {
         // we don't care if this `Updated` event is cancelled as there are no subsequent actions to take
         _ = this.emit(variable, &Updated);
 
-        Ok(Some(()))
+        Ok(Some(ret))
     }
 
     /// remove a variable from the reactive system
