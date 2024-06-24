@@ -66,11 +66,11 @@ impl<'x> System<'x> {
     ///
     /// let a = system.create(|_, _| 0).expect("no cancelling listeners registered");
     /// let b = system.create(move |s, _| {
-    ///     let a = s
-    ///         .read(a, |v| *v)
+    ///     // `b`'s dependency on `a` is automatically tracked here
+    ///     s
+    ///         .read(a, |v| *v + 1)
     ///         .expect("no cancelling listeners registered")
-    ///         .expect("`a` was not deleted");
-    ///     a + 1
+    ///         .expect("`a` was not deleted")
     /// }).expect("no cancelling listeners registered");
     /// assert_eq!(Ok(Some(1)), system.read(b, |v| *v));
     ///
@@ -91,7 +91,7 @@ impl<'x> System<'x> {
     /// Returns:
     /// - [`Err`], if the action was cancelled
     /// - an [`Ok`] value containing [`None`], if the target variable doesn't exist
-    /// - an [`Ok`] value containing the target variable, otherwise
+    /// - an [`Ok`] value containing a [`Some`] value containing the result of the passed callback, otherwise
     ///
     /// # Example
     /// ```
@@ -119,7 +119,7 @@ impl<'x> System<'x> {
     /// Returns:
     /// - [`Err`], if the action was cancelled
     /// - an [`Ok`] value containing [`None`], if the target variable doesn't exist
-    /// - an [`Ok`] value containing [`Some`], otherwise
+    /// - an [`Ok`] value containing a [`Some`] value containing the result of the passed callback, otherwise
     ///
     /// # Example
     /// ```
@@ -154,18 +154,20 @@ impl<'x> System<'x> {
     ///
     /// let a = system.create(|_, _| 0).expect("no cancelling listeners registered");
     /// let b = system.create(move |s, _| {
-    ///     let a = s
-    ///         .read(a, |v| *v)
+    ///     s
+    ///         .read(a, |v| *v + 1)
     ///         .expect("no cancelling listeners registered")
-    ///         .expect("`a` was not deleted");
-    ///     a + 1
+    ///         .expect("`a` was not deleted")
     /// }).expect("no cancelling listeners registered");
     ///
+    /// // can't delete `a` as `b` depends on it
     /// assert_eq!(Err(()), system.delete(a));
     ///
+    /// // if we delete `b` first, we can then delete `a` as it has no dependents
     /// assert_eq!(Ok(Some(1)), system.delete(b));
     /// assert_eq!(Ok(Some(0)), system.delete(a));
     ///
+    /// // now `a` doesn't exist
     /// assert_eq!(Ok(None), system.delete(a));
     /// ```
     pub fn delete<T>(&mut self, variable: Variable<T>) -> Result<Option<T>, ()>
@@ -210,7 +212,7 @@ impl<'x> System<'x> {
     /// let votes = system.emit(None, &CustomEvent { n: 1 }).expect("not aborted if n == 1");
     /// assert!(votes.cancel >= votes.proceed);
     ///
-    /// assert_eq!(Err(()), system.emit(None, &CustomEvent { n: 2 }));
+    /// assert!(system.emit(None, &CustomEvent { n: 2 }).is_err());
     /// ```
     pub fn listen<E, F>(
         &self,
@@ -239,7 +241,10 @@ impl<'x> System<'x> {
     ///
     /// let triggered = system.create(|_, _| false).expect("no cancelling listeners registered");
     /// system.listen(None, move |s, _: &CustomEvent, _, abort| {
-    ///     if s.read(triggered, |v| *v).ok().flatten().unwrap_or_default() {
+    ///     if s.read(triggered, |v| *v)
+    ///         .expect("no cancelling listeners registered")
+    ///         .expect("`a` exists")
+    ///     {
     ///         *abort = true;
     ///     } else {
     ///         _ = s.update(triggered, |v| *v = true);
@@ -278,12 +283,12 @@ impl<'x> System<'x> {
     /// _ = system.emit(None, &CustomEvent);
     /// assert_eq!(Ok(Some(2)), system.read(x, |v| *v));
     ///
-    /// assert_eq!(Some(()), system.silence(listener));
+    /// assert!(system.silence(listener).is_some());
     ///
     /// _ = system.emit(None, &CustomEvent);
     /// assert_eq!(Ok(Some(2)), system.read(x, |v| *v));
     ///
-    /// assert_eq!(None, system.silence(listener));
+    /// assert!(system.silence(listener).is_none());
     /// ```
     pub fn silence<E>(&mut self, listener: Listener<E>) -> Option<()>
     where
