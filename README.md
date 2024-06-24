@@ -57,4 +57,7 @@ This crate is compatible with `no_std` environments, requiring only the `alloc` 
 This crate can be used in both single-threaded and multi-threaded environments.\
 In the spirit of [cargo features being additive](https://doc.rust-lang.org/cargo/reference/features.html#feature-unification), the stricter [`Send`](https://doc.rust-lang.org/core/marker/trait.Send.html) + [`Sync`](https://doc.rust-lang.org/core/marker/trait.Sync.html) bounds of a multi-threaded environment are assumed by default for variable types and callback types, and these bounds can be relaxed for single-threaded environments via the `unsync` feature.
 
+#### MSRV
+The minimum supported Rust version is **1.63.0**.
+
 ---
