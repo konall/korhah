@@ -8,6 +8,8 @@ use korhah::{
 #[derive(Debug, Default, Clone, Copy)]
 struct Item(usize);
 
+// our custom `Update` event which combines the built-in `Updating` & `Updated` events to
+// provide a `prev` and `next` value to better inform possible cancellation of the update
 struct Update {
     prev: Item,
     next: Item,
@@ -22,7 +24,7 @@ fn main() {
         .expect("no cancelling listeners registered");
 
     // a flag that is used to circumvent our custom `Update` logic to allow "normal" variable updates to occur whenever
-    // our custom `Update` needs undoing 
+    // our custom `Update` needs undoing
     let undoing = system
         .create(|_, _| false)
         .expect("no cancelling listeners registered");
@@ -38,9 +40,16 @@ fn main() {
 
         s.listen(target, move |s, _: &Updating, _, _| {
             // if we're undoing our custom `Update` event, we need to skip over our custom logic in order to prevent an infinite cycle
-            if !s.read(undoing, |v| *v).ok().flatten().unwrap_or_default() {
+            if !s
+                .read(undoing, |v| *v)
+                .expect("no `Read`-cancelling listeners registered")
+                .expect("`undoing` exists")
+            {
                 // store the previous value of the target, to be retrieved by the `Updated` event later
-                let prev = s.read(target, |v| *v).ok().flatten().unwrap_or_default();
+                let prev = s
+                    .read(target, |v| *v)
+                    .expect("no `Read`-cancelling listeners registered")
+                    .expect("`e.source` exists");
                 _ = s.update(prev_values, |v| {
                     v.insert(target, prev);
                 });
@@ -49,19 +58,21 @@ fn main() {
 
         s.listen(target, move |s, _: &Updated, _, _| {
             // as above, we prevent an infinite cycle while undoing
-            if !s.read(undoing, |v| *v).ok().flatten().unwrap_or_default() {
+            if !s
+                .read(undoing, |v| *v)
+                .expect("no `Read`-cancelling listeners registered")
+                .expect("`undoing` exists")
+            {
                 // retrieve the information for our custom `Update` event
                 let prev = s
-                    .read(prev_values, |v| v.get(&target).copied())
-                    .ok()
+                    .update(prev_values, |v| v.remove(&target)) // we no longer need the previous value
+                    .expect("`Update` wasn't cancelled")
                     .flatten()
-                    .flatten()
-                    .unwrap_or_default();
-                let next = s.read(target, |v| *v).ok().flatten().unwrap_or_default();
-                // we no longer need the previous value
-                _ = s.update(prev_values, |v| {
-                    v.remove(&target);
-                });
+                    .expect("`prev_values` exists and contained `e.source`");
+                let next = s
+                    .read(target, |v| *v)
+                    .expect("no `Read`-cancelling listeners registered")
+                    .expect("`e.source` exists");
 
                 // let's abandon our custom `Update` event if it is aborted, or if the votes to cancel >= the votes to proceed
                 let undo = match s.emit(target, &Update { prev, next }) {
@@ -82,7 +93,10 @@ fn main() {
 
         s.listen(target, move |s, e: &Update, vote, _| {
             // while `should_cancel` is set, our `Update` event will always be cancelled, so no updates should happen
-            let should_cancel = s.read(should_cancel, |v| *v).ok().flatten().unwrap_or_default();
+            let should_cancel = s
+                .read(should_cancel, |v| *v)
+                .expect("no `Read`-cancelling listeners registered")
+                .expect("`should_cancel` exists");
             if should_cancel {
                 *vote = Vote::Cancel;
                 println!("-> prevented change: {} => {}", e.prev.0, e.next.0);
@@ -109,8 +123,7 @@ fn main() {
             }
             "@val" => {
                 // print the current value of our testing variable `x`
-                let x = system.read(x, |v| *v).ok().flatten().unwrap_or_default();
-                println!("-> x = {}", x.0);
+                _ = system.read(x, |v| println!("-> x = {}", v.0));
             }
             _ => {
                 // otherwise we show of our `Update` event by setting our test variable to the # chars read
